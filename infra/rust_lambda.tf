@@ -1,7 +1,7 @@
 module "lambda_function" {
   source = "terraform-aws-modules/lambda/aws"
 
-  function_name = "rust-aws-lambda"
+  function_name = "rust-aws-lambda-image"
   description   = "Create an AWS Lambda in Rust with Terraform"
   runtime       = "provided.al2"
   architectures = ["arm64"]

@@ -7,6 +7,7 @@ cargo lambda build --release --arm64 --output-format zip
 ## deploy
 
 ```bash
+terraform -chdir=infra init
 AWS_PROFILE=<your_profile> terraform -chdir=infra plan
 AWS_PROFILE=<your_profile> terraform -chdir=infra apply
 ```
