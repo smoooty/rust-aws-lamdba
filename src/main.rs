@@ -1,23 +1,10 @@
 use lambda_http::{
     http::{Response, StatusCode},
-    run, service_fn, Error, IntoResponse, Request, RequestExt,
+    run, service_fn, Body, Error, Request, RequestExt,
 };
-use serde_json::json;
+use og_image_writer::{style, writer::OGImageWriter};
 
-// // Wrapper for our core function
-// // Its role is to extract the relevant info from the incoming event, and convert the
-// // response to json.
-// #[tracing::instrument()]
-// async fn run_lambda(event: LambdaEvent<Value>) -> Result<Value, Error> {
-//     let (event, context) = event.into_parts();
-//     tracing::info!(event = ?event, context = ?context);
-
-//     let name = event["name"].as_str();
-//     let result = say_hello(name);
-
-//     Ok(json!(result))
-// }
-async fn function_handler(event: Request) -> Result<impl IntoResponse, Error> {
+async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
     // Extract some useful information from the request
 
     let name = event
@@ -26,16 +13,13 @@ async fn function_handler(event: Request) -> Result<impl IntoResponse, Error> {
         .unwrap_or("stranger")
         .to_string();
 
+    let img = generate_image(&name).expect("image created");
+
     // Represents an HTTP response
     let response = Response::builder()
         .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .body(
-            json!({
-              "message": format!("Hello, {}!", name),
-            })
-            .to_string(),
-        )
+        .header("Content-Type", "image/png")
+        .body(img.into())
         .map_err(Box::new)?;
 
     Ok(response)
@@ -55,59 +39,40 @@ async fn main() -> Result<(), Error> {
     run(service_fn(function_handler)).await
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use lambda_runtime::{Context, LambdaEvent};
+fn generate_image(text: &str) -> Result<Vec<u8>, Error> {
+    let mut writer = OGImageWriter::new(style::WindowStyle {
+        width: 1024,
+        height: 512,
+        background_color: Some(style::Rgba([70, 40, 90, 255])),
+        align_items: style::AlignItems::Center,
+        justify_content: style::JustifyContent::Center,
+        ..style::WindowStyle::default()
+    })
+    .expect("intialize writer");
 
-//     #[test]
-//     fn test_name_provided() {
-//         let name = "world";
-//         let result = say_hello(Some(name));
-//         assert_eq!(
-//             HelloResponse {
-//                 message: format!("Hello, {name}!")
-//             },
-//             result
-//         );
-//     }
+    let font = Vec::from(include_bytes!("../assets/SKRAPPA.ttf") as &[u8]);
 
-//     #[test]
-//     fn test_no_name_provided() {
-//         let result = say_hello(None);
-//         assert_eq!(
-//             HelloResponse {
-//                 message: "Hello, stranger!".into()
-//             },
-//             result
-//         );
-//     }
+    writer
+        .set_text(
+            text,
+            style::Style {
+                margin: style::Margin(0, 20, 0, 20),
+                line_height: 1.8,
+                font_size: 100.,
+                word_break: style::WordBreak::Normal,
+                color: style::Rgba([255, 255, 255, 255]),
+                text_align: style::TextAlign::Start,
+                ..style::Style::default()
+            },
+            Some(font.clone()),
+        )
+        .expect("set text");
 
-//     #[tokio::test]
-//     async fn test_wrapper_name_provided() {
-//         let name = "world";
-//         let event = LambdaEvent::new(json!({ "name": name }), Context::default());
-//         let expected_result = json!({ "message": format!("Hello, {name}!") });
+    writer.paint().expect("paint img");
 
-//         let result = run_lambda(event).await;
+    let img = writer
+        .encode(og_image_writer::ImageOutputFormat::Png)
+        .expect("encode png");
 
-//         assert!(result.is_ok());
-//         let result = result.unwrap();
-//         assert_eq!(result, expected_result);
-//     }
-
-//     #[tokio::test]
-//     async fn test_wrapper_no_name_provided() {
-//         let event = LambdaEvent::new(
-//             json!({ "meaningless_key": "meaningless_value" }),
-//             Context::default(),
-//         );
-//         let expected_result = json!({ "message": format!("Hello, stranger!") });
-
-//         let result = run_lambda(event).await;
-
-//         assert!(result.is_ok());
-//         let result = result.unwrap();
-//         assert_eq!(result, expected_result);
-//     }
-// }
+    Ok(img)
+}
