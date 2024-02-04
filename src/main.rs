@@ -9,11 +9,21 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
 
     let name = event
         .query_string_parameters_ref()
-        .and_then(|params| params.first("name"))
+        .and_then(|params| params.first("text"))
         .unwrap_or("stranger")
         .to_string();
 
-    let img = generate_image(&name).expect("image created");
+    let bg = event
+        .query_string_parameters_ref()
+        .and_then(|params| params.first("bg"))
+        .unwrap_or("purple");
+
+    let justify = event
+        .query_string_parameters_ref()
+        .and_then(|params| params.first("justify"))
+        .unwrap_or("center");
+
+    let img = generate_image(&name, bg, justify).expect("image created");
 
     // Represents an HTTP response
     let response = Response::builder()
@@ -39,13 +49,24 @@ async fn main() -> Result<(), Error> {
     run(service_fn(function_handler)).await
 }
 
-fn generate_image(text: &str) -> Result<Vec<u8>, Error> {
+fn generate_image(text: &str, background: &str, justify: &str) -> Result<Vec<u8>, Error> {
+    let bg = match background {
+        "purple" => [70, 40, 90, 255],
+        "one" => [20, 40, 40, 200],
+        "two" => [60, 50, 30, 155],
+        _ => [55, 40, 90, 255],
+    };
+
     let mut writer = OGImageWriter::new(style::WindowStyle {
         width: 1024,
         height: 512,
-        background_color: Some(style::Rgba([70, 40, 90, 255])),
+        background_color: Some(style::Rgba(bg)),
         align_items: style::AlignItems::Center,
-        justify_content: style::JustifyContent::Center,
+        justify_content: match justify {
+            "start" => style::JustifyContent::Start,
+            "end" => style::JustifyContent::End,
+            _ => style::JustifyContent::Center,
+        },
         ..style::WindowStyle::default()
     })
     .expect("intialize writer");
